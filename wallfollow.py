@@ -5,9 +5,9 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 import math
 
-is_wall_found = False # I feel dirty doing this. 
-
 class FollowWall():
+	is_wall_found = False
+	initial_turn_done = False
 	def __init__(self):
 		rospy.init_node('FollowWall', anonymous=True)
 		rospy.on_shutdown(self.shutdown)
@@ -42,7 +42,7 @@ class FollowWall():
 		ul_bound = uup_bound - 30
 		left_sensor_data = list_filter(range_data[ul_bound:uup_bound])
 
-		self.follow_wall(left_sensor_data, centre_sensor_data, right_sensor_data, rate)
+		self.go(left_sensor_data, centre_sensor_data, right_sensor_data, rate)
 			
 	def move(self, direction, rate):
 		move_cmd = Twist()
@@ -69,27 +69,36 @@ class FollowWall():
 			self.move('forward', rate)
 		else: 
 			print 'Wall is found, adjusting to make turtlebot perpendicular.'
-			round_left = math.ceil(left_avg * 100.0) / 100.0
-			round_right = math.ceil(right_avg * 100.0) / 100.0
-
-			if abs(round_left-round_right) < 0.05:
+			if abs(left_avg-right_avg) < 0.1:
 				# Not perfect but should be good enough
 				print 'Adjustments complete. Ready to follow wall'
 				print '===================='
 				self.move('stop', rate)
+				self.is_wall_found = True
 				rospy.sleep(3) # stop for a few seconds to give yourself a pat on the back
 			else:
 				print 'Beginning adjustments...'
-				print 'Current measurments:\n left: ' + str(round_left) + ' right: ' + str(round_right)
-				if round_left > round_right:
+				print 'Current measurments:\n left: ' + str(left_avg) + ' right: ' + str(right_avg)
+				if left_avg > right_avg:
 					self.move('stop', rate)
 					self.move('right', rate)
-				elif round_left < round_right:
+				else:
 					self.move('stop', rate)
 					self.move('left', rate)
 
+	def follow_wall(self, left_avg, centre_avg, right_avg, rate):
+		print 'left: ' + str(left_avg) + ' right: ' + str(right_avg)
+		if right_avg - left_avg <= 0.50 and right_avg != 0 and left_avg == 0:
+			self.move('stop', rate)
+			print 'Turned and ready to go.'
+			self.initial_turn_done = True
+			rospy.sleep(3) # good boy
+		else:
+			print 'Turning...'
+			self.move('left', rate)
 
-	def follow_wall(self, left, centre, right, rate):
+
+	def go(self, left, centre, right, rate):
 		# i'll refactor this later
 		def avg(lst):
 			return sum(lst)/float(len(lst))
@@ -100,13 +109,18 @@ class FollowWall():
 			centre_average_distance = avg(centre) 
 		right_average_distance = 0
 		if right:
-			right_average_distance = avg(right)
+			right_average_distance = math.ceil(avg(right) * 100.0) / 100.0
 		left_average_distance = 0
 		if left:	
-			left_average_distance = avg(left)
+			left_average_distance = math.ceil(avg(left) * 100.0) / 100.0
 
-		self.approach_wall(left_average_distance, centre_average_distance, right_average_distance, rate)
-			
+		if not self.is_wall_found:
+			self.approach_wall(left_average_distance, centre_average_distance, right_average_distance, rate)
+		elif not self.initial_turn_done:
+			self.follow_wall(left_average_distance, centre_average_distance, right_average_distance, rate)
+		else:
+			print 'nothing to do: waiting for instructions'	
+
 	def listener(self):
 		subscriber = rospy.Subscriber('/scan', LaserScan, self.callback)
 		rospy.spin()
