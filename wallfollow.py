@@ -86,16 +86,32 @@ class FollowWall():
 					self.move('stop', rate)
 					self.move('left', rate)
 
-	def follow_wall(self, left_avg, centre_avg, right_avg, rate):
+	def init_turn(self, left_avg, centre_avg, right_avg, rate):
 		print 'left: ' + str(left_avg) + ' right: ' + str(right_avg)
 		if right_avg - left_avg <= 0.50 and right_avg != 0 and left_avg == 0:
 			self.move('stop', rate)
 			print 'Turned and ready to go.'
+			print '===================='
 			self.initial_turn_done = True
 			rospy.sleep(3) # good boy
 		else:
 			print 'Turning...'
 			self.move('left', rate)
+
+	def follow_wall(self, left_avg, centre_avg, right_avg, rate):
+		if right_avg > 0.5: 
+			print 'Too far from ideal state: adjusting...'
+			self.move('right', rate)
+			self.move('forward', rate)
+		elif right_avg < 0.3:
+			print 'Too close from ideal state: adjusting...'
+			self.move('left', rate)
+			self.move('forward', rate)
+		else:
+			# Everything is ok.
+			self.move('forward', rate)
+		# As the turtlebot moves forward, the right value increases while < 1, then 
+		# it goes to 0 thanks to our invariant.
 
 
 	def go(self, left, centre, right, rate):
@@ -117,9 +133,9 @@ class FollowWall():
 		if not self.is_wall_found:
 			self.approach_wall(left_average_distance, centre_average_distance, right_average_distance, rate)
 		elif not self.initial_turn_done:
-			self.follow_wall(left_average_distance, centre_average_distance, right_average_distance, rate)
+			self.init_turn(left_average_distance, centre_average_distance, right_average_distance, rate)
 		else:
-			print 'nothing to do: waiting for instructions'	
+			self.follow_wall(left_average_distance, centre_average_distance, right_average_distance, rate)
 
 	def listener(self):
 		subscriber = rospy.Subscriber('/scan', LaserScan, self.callback)
