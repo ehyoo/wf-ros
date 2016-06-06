@@ -3,6 +3,7 @@
 import rospy
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
+from math import radians
 
 class FollowWall():
 	def __init__(self):
@@ -40,17 +41,38 @@ class FollowWall():
 
 		if centre_sensor_data:
 			if centre_sensor_data[0] > 0.5:
-				self.move_forward()
+				self.move('forward')
 			else:
+				self.move('right')
+				self.follow_wall(left_sensor_data, centre_sensor_data, right_sensor_data)
 		else:
 			self.move_forward()
 			
-
-	def move_forward(self):
+	def move(self, direction):
 		move_cmd = Twist()
-		move_cmd.linear.x = 0.2
-		move_cmd.angular.z = 0
+		if direction == 'forward':
+			move_cmd.linear.x = 0.2
+		elif direction == 'right':
+			move_cmd.angular.z = radians(45)
+		elif direction == 'left':
+			move_cmd.angular.z = -radians(45)
+		else:
+			print('direction not implemented yet')
 		self.cmd_vel.publish(move_cmd)
+		rospy.sleep()
+
+	def follow_wall(left, centre, right):
+		if right: 
+			if centre:
+				average_distance = sum(centre)/float(len(centre))
+				if average_distance > 0.5:
+					# move forward
+				else:
+					# turn left
+			else:
+				# keep moving forward
+		else:
+			# move foward for like 5 seconds, then turn right 
 
 	def listener(self):
 		subscriber = rospy.Subscriber('/scan', LaserScan, self.callback)
